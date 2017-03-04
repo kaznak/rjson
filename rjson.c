@@ -110,25 +110,15 @@ int prs_json(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
 
     case '{':
       ctoklp->next = &ntokl;
-      if(0 == prs_object(&ntokl, inf, outf))	{
-	ctoklp->next = NULL;
-	prs_print_path(inf, outf);
-	fprintf(outf, " {}\n");
-      }
+      prs_object(&ntokl, inf, outf);
       ctoklp->name[0] = '\0';
       ctoklp->index = 0;
-      ctoklp->next = NULL;
       break;
     case '[':
       ctoklp->next = &ntokl;
-      if(0 == prs_array(&ntokl, inf, outf))	{
-	ctoklp->next = NULL;
-	prs_print_path(inf, outf);
-	fprintf(outf, " []\n");
-      }
+      prs_array(&ntokl, inf, outf);
       ctoklp->name[0] = '\0';
       ctoklp->index = 0;
-      ctoklp->next = NULL;
       break;
 
     case '\t' : case '\r' : case '\n' : case ' ':
@@ -333,14 +323,10 @@ int prs_array(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       switch(as)	{
       case AINI: case AVAL:
 	ctoklp->next = &ntokl;
-	if(0 == prs_object(&ntokl, inf, outf))	{
-	  ctoklp->next = NULL;
-	  prs_print_path(inf, outf);
-	  fprintf(outf, " {}\n");
-	}
+	prs_object(&ntokl, inf, outf);
 	ctoklp->name[0] = '\0';
 	ctoklp->index = 0;
-	ctoklp->next = NULL;
+	ctoklp->prev->index++;
 	as = ADLM;
 	break;
       default:
@@ -353,14 +339,10 @@ int prs_array(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       switch(as)	{
       case AINI: case AVAL:
 	ctoklp->next = &ntokl;
-	if(0 == prs_array(&ntokl, inf, outf))	{
-	  ctoklp->next = NULL;
-	  prs_print_path(inf, outf);
-	  fprintf(outf, " []\n");
-	}
+	prs_array(&ntokl, inf, outf);
 	ctoklp->name[0] = '\0';
 	ctoklp->index = 0;
-	ctoklp->next = NULL;
+	ctoklp->prev->index++;
 	as = ADLM;
 	break;
       default:
@@ -372,6 +354,11 @@ int prs_array(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
     case ']':
       switch(as)	{
       case AINI: case ADLM:
+	ctoklp->prev->next = NULL;
+	if(0 == ctoklp->prev->index)	{
+	  prs_print_path(inf, outf);
+	  fprintf(outf, " []\n");
+	}
 	return ctoklp->prev->index;
       default:
 	errmsg("unexpected token\n");
@@ -471,14 +458,10 @@ int prs_object(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       switch(os)	{
       case OVAL:
 	ctoklp->next = &ntokl;
-	if(0 == prs_object(&ntokl, inf, outf))	{
-	  ctoklp->next = NULL;
-	  prs_print_path(inf, outf);
-	  fprintf(outf, " {}\n");
-	}
+	prs_object(&ntokl, inf, outf);
 	ctoklp->name[0] = '\0';
 	ctoklp->index = 0;
-	ctoklp->next = NULL;
+	ctoklp->prev->index++;
 	os = VKD;
 	break;
       default:
@@ -491,14 +474,10 @@ int prs_object(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       switch(os)	{
       case OVAL:
 	ctoklp->next = &ntokl;
-	if(0 == prs_array(&ntokl, inf, outf))	{
-	  ctoklp->next = NULL;
-	  prs_print_path(inf, outf);
-	  fprintf(outf, " []\n");
-	}
+	prs_array(&ntokl, inf, outf);	
 	ctoklp->name[0] = '\0';
 	ctoklp->index = 0;
-	ctoklp->next = NULL;
+	ctoklp->prev->index++;
 	os = VKD;
 	break;
       default:
@@ -510,6 +489,11 @@ int prs_object(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
     case '}':
       switch(os)	{
       case OINI: case VKD:
+	ctoklp->prev->next = NULL;
+	if(0 == ctoklp->prev->index)	{
+	  prs_print_path(inf, outf);
+	  fprintf(outf, " {}\n");
+	}
 	return ctoklp->prev->index;
       default:
 	errmsg("unexpected token\n");
