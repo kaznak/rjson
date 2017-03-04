@@ -237,7 +237,7 @@ int prs_set_string(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
 	  if((('0' <= c) && (c <= '9'))	||
 	     (('A' <= c) && (c <= 'F'))	||
 	     (('a' <= c) && (c <= 'f'))	)	{
-	    putc(c, outf);
+	    *(np++) = c;
 	      } else	{
 	    errmsg("invalid unicode sequence.\n");
 	    exit(1);
