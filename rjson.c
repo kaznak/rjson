@@ -17,7 +17,7 @@ const size_t tfmt_len = 15;
  
 char *pname;
 time_t stime_t;
-char stime[tfmt_len];
+char *stime_s;
 pid_t pid;
 
 int initpparam(int argc,char *argv[])	{
@@ -31,7 +31,9 @@ int initpparam(int argc,char *argv[])	{
     return -1;
   if((tm = localtime(&stime_t)) == NULL)
     return -1;
-  if(strftime(stime, sizeof(stime), tfmt, tm) == 0)
+  if(NULL == (stime_s = malloc(tfmt_len)))
+    return -1;
+  if(strftime(stime_s, sizeof(stime_s), tfmt, tm) == 0)
     return -1;
 
   // pid
@@ -43,7 +45,7 @@ int initpparam(int argc,char *argv[])	{
 int eprintmsg(int lineno, char *fmt, ...)	{
   va_list ap;
 
-  fprintf(stderr, "%s %s %d %d ", pname, stime, pid, lineno);
+  fprintf(stderr, "%s %s %d %d ", pname, stime_s, pid, lineno);
   
   va_start(ap, fmt);
   vfprintf(stderr, fmt, ap);
