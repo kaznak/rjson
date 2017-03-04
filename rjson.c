@@ -177,11 +177,13 @@ int prs_print_string(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
 
   prs_print_path(inf, outf);
 
-  putc(' ', outf); putc(getc(inf), outf);
+  // putc(' ', outf); putc(getc(inf), outf);
+  putc(' ', outf); getc(inf);
   for(c = getc(inf); c != EOF; c = getc(inf))	{
     switch(c)	{
     case '"':
-      putc(c, outf); putc('\n', outf);
+      // putc(c, outf); putc('\n', outf);
+      putc('\n', outf);
       return 0;
 
     case '\\':
@@ -357,7 +359,8 @@ int prs_array(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
 	ctoklp->prev->next = NULL;
 	if(0 == ctoklp->prev->index)	{
 	  prs_print_path(inf, outf);
-	  fprintf(outf, " []\n");
+	  // fprintf(outf, " []\n");
+	  fprintf(outf, "[0] \n");
 	}
 	return ctoklp->prev->index;
       default:
@@ -492,7 +495,8 @@ int prs_object(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
 	ctoklp->prev->next = NULL;
 	if(0 == ctoklp->prev->index)	{
 	  prs_print_path(inf, outf);
-	  fprintf(outf, " {}\n");
+	  // fprintf(outf, " {}\n");
+	  fprintf(outf, ". \n");
 	}
 	return ctoklp->prev->index;
       default:
