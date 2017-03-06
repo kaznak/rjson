@@ -622,8 +622,7 @@ int prs_object(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       errmsg("ERROR invalid characer %c.\n", c);
       exit(1);
     }
-    errmsg("ERROR unreachabel.\n");
-    exit(3);
+    break;
 
   case OVAL:
   oval:
@@ -689,10 +688,10 @@ int prs_object(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       errmsg("ERROR invalid characer %c.\n", c);
       exit(1);
     }
+    break;
 
   default:
-    errmsg("ERROR unreachable.\n");
-    exit(3);
+    break;
   }
 
   errmsg("ERROR unreachable.\n");
