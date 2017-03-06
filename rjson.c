@@ -187,21 +187,25 @@ int prs_print_string(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
   switch(p->ps)	{
   case SSTR:
   sstr:
-    while('"' != (c = getc(inf)))	{
-      switch(c)	{
-      case EOF:
-	errmsg("ERROR unexpected EOF.\n");
-	exit(1);
-      case '\\':
-	goto sesc;
-      default:
-	putc(c, outf);
-      }
+    p->ps = SSTR;
+    switch(c = getc(inf))	{
+    case '"':
+      putc(c, outf);
+      return (p->c = c);
+    case EOF:
+      errmsg("ERROR unexpected EOF.\n");
+      exit(1);
+    case '\\':
+      goto sesc;
+    default:
+      putc(c, outf);
+      goto sstr;
     }
     break;
-
+    
   case SESC:
   sesc:
+    p->ps = SESC;
     switch(c = getc(inf))	{
     case EOF:
       errmsg("ERROR unexpected EOF.\n");
@@ -215,24 +219,23 @@ int prs_print_string(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       putc('\\', outf); putc(c, outf);
       goto sstr;
     }
-    errmsg("ERROR unreachable.\n");
-    exit(3);
+    break;
 
   case SUNC:
   sunc:
+    p->ps = SUNC;
     /* TODO decode */
     putc('\\', outf); putc('u', outf);
-    for(i = 0; i < 4; putc(getc(inf), outf));
+    for(i = 0; i < 4; i++)	putc(getc(inf), outf);
     goto sstr;
     break;
 
   default:
-    errmsg("ERROR unreachable.\n");
-    exit(3);
+    ;
   }
 
-  putc(c, outf);
-  return (p->c = c);
+  errmsg("ERROR unreachable.\n");
+  exit(3);
 }
 
 int prs_set_string(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
@@ -279,7 +282,7 @@ int prs_set_string(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
   sunc:
     /* TODO decode */
     *(np++) = '\\'; *(np++) = 'u';
-    for(i = 0; i < 4;*(np++) = getc(inf));
+    for(i = 0; i < 4; i++)	*(np++) = getc(inf);
     goto sstr;
     break;
 
@@ -344,8 +347,6 @@ int prs_array(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       c = getc(inf);
     } else if('{' == c) {
       /* OBJECT */
-      errmsg("INFO not yet.\n");
-
       p->c = c;
       ctoklp->next = &ntokl;
       r = prs_object(&ntokl, inf, outf);
@@ -400,8 +401,6 @@ int prs_array(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       c = getc(inf);
     } else if('{' == c) {
       /* OBJECT */
-      errmsg("INFO not yet.\n");
-
       p->c = c;
       ctoklp->next = &ntokl;
       c = prs_object(&ntokl, inf, outf);
@@ -547,8 +546,6 @@ int prs_object(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       c = getc(inf);
     } else if('[' == c) {
       /* ARRAY */
-      errmsg("INFO not yet.\n");
-
       p->c = c;
       ctoklp->next = &ntokl;
       r = prs_array(&ntokl, inf, outf);
@@ -562,8 +559,6 @@ int prs_object(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       c = getc(inf);
     } else if('{' == c) {
       /* OBJECT */
-      errmsg("INFO not yet.\n");
-
       p->c = c;
       ctoklp->next = &ntokl;
       r = prs_object(&ntokl, inf, outf);
@@ -610,7 +605,7 @@ int prs_object(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
 
   errmsg("ERROR unreachable.\n");
   exit(3);
-}  
+}
 
 int main(int argc,char *argv[]) {
   initpparam(argc, argv);
