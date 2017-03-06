@@ -509,10 +509,10 @@ int prs_array(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       errmsg("ERROR invalid characer %c.\n", c);
       exit(1);
     }
+    break;
 
   default:
-    errmsg("ERROR unreachable.\n");
-    exit(3);
+    break;
   }
 
   errmsg("ERROR unreachable.\n");
