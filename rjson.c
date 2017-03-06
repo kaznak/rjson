@@ -63,6 +63,21 @@ const char *pathfmt = ".%s";
 // const char *indfmt = "[%04d]";
 const char *indfmt = "[%d]";
 
+enum	pstate	{
+  TOP,					// TOP loop
+  OINI, OKEY, OKVD, OVAL, OVKD,		// OBJECT
+  AINI, AVAL, AVDL,			// ARRAY
+  PRIM,					// NUMBER, true, false, null
+  SSTR, SESC, SUNC,			// STRING
+  ALL
+};
+
+struct parser	{
+  enum pstate ps;
+  char c;
+};
+struct parser prs, *p =&prs;
+
 struct tokl	{
   char name[BUFSIZ - sizeof(int) - sizeof(struct tokl*)];
   int index;
@@ -72,7 +87,8 @@ const size_t TOKLNLEN = BUFSIZ - sizeof(int) - sizeof(struct tokl*);
 
 struct tokl toklh;
 
-int prs_print_path(FILE *inf, FILE *outf);
+int prs_print_path(FILE *outf);
+
 int prs_print_primitive(struct tokl *ctoklp, FILE *inf, FILE *outf);
 int prs_print_string(struct tokl *ctoklp, FILE *inf, FILE *outf);
 int prs_set_string(struct tokl *ctoklp, FILE *inf, FILE *outf);
@@ -81,60 +97,62 @@ int prs_object(struct tokl *ctoklp, FILE *inf, FILE *outf);
 
 int prs_json(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
   struct tokl ntokl;
-  int c;
+  int r = 0, c = getc(inf);
 
   ctoklp->name[0] = '\0';
   ctoklp->index = 0;
   ctoklp->next = NULL;
   ntokl.prev = ctoklp;
 
-  for(c = getc(inf); c != EOF; c = getc(inf))	{
-    switch(c)	{
-    case '\"':
-      if(EOF == ungetc(c, inf))	{
-	errmsg("error while unread.\n");
-	exit(1);
-      }
-      prs_print_string(ctoklp, inf, outf);
-      break;
-      
-    case '-': case '0': case '1' : case '2': case '3' : case '4':
-    case '5': case '6': case '7' : case '8': case '9':
-    case 't': case 'f': case 'n' :
-      if(EOF == ungetc(c, inf))	{
-	errmsg("error while unread.\n");
-	exit(1);
-      }
-      prs_print_primitive(ctoklp, inf, outf);
-      break;
+  /* state: top loop */
 
-    case '{':
-      ctoklp->next = &ntokl;
-      prs_object(&ntokl, inf, outf);
-      ctoklp->name[0] = '\0';
-      ctoklp->index = 0;
-      break;
-    case '[':
-      ctoklp->next = &ntokl;
-      prs_array(&ntokl, inf, outf);
-      ctoklp->name[0] = '\0';
-      ctoklp->index = 0;
-      break;
+  p->ps = TOP;
 
-    case '\t' : case '\r' : case '\n' : case ' ':
-      /* skip */
-      break;
+  /* skip white spaces */
+ top:
+  if(NULL != memchr(" \n\r\t", c, strlen(" \n\r\t")))	{
+    c = getc(inf); goto top;
+  } else if(NULL != memchr("-0123456789tfn", c, strlen("-0123456789tfn")))	{
+    /* NUMBER, true, false, null */
+    p->c = c;
+    prs_print_path(outf); putc(' ', outf);
+    r = prs_print_primitive(ctoklp, inf, outf); putc('\n', outf);
+  } else if('"' == c)	{
+    /* STRING */
+    p->c = c;
+    prs_print_path(outf); putc(' ', outf);
+    r = prs_print_string(ctoklp, inf, outf); putc('\n', outf);
+  } else if('[' == c) {
+    /* ARRAY */
+    p->c = c;
+    ctoklp->next = &ntokl;
+    r = prs_array(&ntokl, inf, outf);
 
-    default:
-      errmsg("error unexpected character %c.\n", c);
-      exit(1);
-    }
+    ctoklp->name[0] = '\0';
+    ctoklp->index = 0;
+    ctoklp->next = NULL;
+    
+  } else if('{' == c) {
+    /* OBJECT */
+    p->c = c;
+    ctoklp->next = &ntokl;
+    r = prs_object(&ntokl, inf, outf);
+    
+    ctoklp->name[0] = '\0';
+    ctoklp->index = 0;
+    ctoklp->next = NULL;
+    
+  } else if(EOF == c)	{
+    return c;
+  } else	{
+    errmsg("ERROR invalid characer %c.\n", c);
+    exit(1);
   }
 
-  return 0;
+  return (p->c = r);
 }
 
-int prs_print_path(FILE *inf, FILE *outf)	{
+int prs_print_path(FILE *outf)	{
   struct tokl *xtoklp;
 
   printf("%s", pathroot);
@@ -149,379 +167,455 @@ int prs_print_path(FILE *inf, FILE *outf)	{
 }
 
 int prs_print_primitive(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
-  int c;
-
-  prs_print_path(inf, outf); putc(' ', outf);
-
-  for(c = getc(inf); c != EOF; c = getc(inf))	{
-    switch(c)	{
-    case '\t' : case '\r' : case '\n' : case ' ' :
-    case ','  : case ']'  : case '}' :
-      if(EOF == ungetc(c, inf))	{
-	errmsg("error while unread.\n");
-	exit(1);
-      }
-      putc('\n', outf);
-      return 0;
-
-    default:
-      putc(c, outf);
-      break;
-    }
+  int c = getc(inf);
+  p->ps = PRIM;
+  putc(p->c, outf);
+  for(;
+      EOF == c || NULL == memchr(",:]} \n\r\t\"[{", c, strlen(",:]} \n\r\t\"[{"));
+      c = getc(inf)	)	{
+    putc(c, outf);
   }
-  return 0;
+  return (p->c = c);
 }
 
 int prs_print_string(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
-  int c, i;
+  int i, c;
+  p->ps = SSTR;
 
-  prs_print_path(inf, outf);
+  putc(p->c, outf);
 
-  // putc(' ', outf); putc(getc(inf), outf);
-  putc(' ', outf); getc(inf);
-  for(c = getc(inf); c != EOF; c = getc(inf))	{
-    switch(c)	{
-    case '"':
-      // putc(c, outf); putc('\n', outf);
-      putc('\n', outf);
-      return 0;
-
-    case '\\':
-      c = getc(inf);
-      if('u' == c)	{
-	// TODO decode this
-	putc('\\', outf); putc('u', outf);
-	for(i = 0; i < 4; i++)	{
-	  c = getc(inf);
-	  if((('0' <= c) && (c <= '9'))	||
-	     (('A' <= c) && (c <= 'F'))	||
-	     (('a' <= c) && (c <= 'f'))	)	{
-	    putc(c, outf);
-	      } else	{
-	    errmsg("invalid unicode sequence.\n");
-	    exit(1);
-	  }
-	}
-	break;
-      } else	{
-	putc('\\', outf); putc(c, outf);
+  switch(p->ps)	{
+  case SSTR:
+  sstr:
+    while('"' != (c = getc(inf)))	{
+      switch(c)	{
+      case EOF:
+	errmsg("ERROR unexpected EOF.\n");
+	exit(1);
+      case '\\':
+	goto sesc;
+      default:
+	putc(c, outf);
       }
-      break;
-
-    default:
-      putc(c, outf);
-      break;
     }
+    break;
+
+  case SESC:
+  sesc:
+    switch(c = getc(inf))	{
+    case EOF:
+      errmsg("ERROR unexpected EOF.\n");
+      exit(1);
+    case 'u':
+      goto sunc;
+    case '/':
+      putc(c, outf);
+      goto sstr;
+    default:
+      putc('\\', outf); putc(c, outf);
+      goto sstr;
+    }
+    errmsg("ERROR unreachable.\n");
+    exit(3);
+
+  case SUNC:
+  sunc:
+    /* TODO decode */
+    putc('\\', outf); putc('u', outf);
+    for(i = 0; i < 4; putc(getc(inf), outf));
+    goto sstr;
+    break;
+
+  default:
+    errmsg("ERROR unreachable.\n");
+    exit(3);
   }
 
-  errmsg("string expected, but EOF.\n");
-  exit(1);
+  putc(c, outf);
+  return (p->c = c);
 }
 
 int prs_set_string(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
+  int i, c;
   char *np = ctoklp->prev->name;
-  int c, i;
+  
+  p->ps = SSTR;
 
-  getc(inf);
-  for(c = getc(inf); c != EOF; c = getc(inf))	{
-    switch(c)	{
-    case '"':
-      *(np++) = '\0';
-      return 0;
-
-    case '\\':
-      *(np++) = getc(inf);
-      if('u' == c)	{
-	// TODO decode this
-	*(np++) = '\\'; *(np++) = 'u';
-	for(i = 0; i < 4; i++)	{
-	  c = getc(inf);
-	  if((('0' <= c) && (c <= '9'))	||
-	     (('A' <= c) && (c <= 'F'))	||
-	     (('a' <= c) && (c <= 'f'))	)	{
-	    *(np++) = c;
-	      } else	{
-	    errmsg("invalid unicode sequence.\n");
-	    exit(1);
-	  }
-	}
-	break;
-      } else	{
-	*(np++) = '\\'; *(np++) = c;
+  switch(p->ps)	{
+  case SSTR:
+  sstr:
+    while('"' != (c = getc(inf)))	{
+      switch(c)	{
+      case EOF:
+	errmsg("ERROR unexpected EOF.\n");
+	exit(1);
+      case '\\':
+	goto sesc;
+      default:
+	*(np++) = c;
       }
-      break;
-
-    default:
-      *(np++) = c;
-      break;
     }
+    break;
+
+  case SESC:
+  sesc:
+    switch(c = getc(inf))	{
+    case EOF:
+      errmsg("ERROR unexpected EOF.\n");
+      exit(1);
+    case 'u':
+      goto sunc;
+    case '/':
+      *(np++) = c;
+      goto sstr;
+    default:
+      *(np++) = '\\'; *(np++) = c;
+      goto sstr;
+    }
+    errmsg("ERROR unreachable.\n");
+    exit(3);
+
+  case SUNC:
+  sunc:
+    /* TODO decode */
+    *(np++) = '\\'; *(np++) = 'u';
+    for(i = 0; i < 4;*(np++) = getc(inf));
+    goto sstr;
+    break;
+
+  default:
+    errmsg("ERROR unreachable.\n");
+    exit(3);
   }
 
-  errmsg("string expected, but EOF.\n");
-  exit(1);
+  *np = '\0';
+  return (p->c = c);
 }
 
-enum arrstat	{ AINI, AVAL, ADLM };
+//  AINI, AVAL, AVDL,			// ARRAY
 int prs_array(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
   struct tokl ntokl;
-  int c;
-  enum arrstat as = AINI;
+  int r = 0, c = getc(inf);
 
   ctoklp->name[0] = '\0';
   ctoklp->index = 0;
   ctoklp->next = NULL;
   ntokl.prev = ctoklp;
 
-  for(c = getc(inf); c != EOF; c = getc(inf))	{
-    switch(c)	{
-    case '\"':
-      switch(as)	{
-      case AINI: case AVAL:
-	if(EOF == ungetc(c, inf))	{
-	  errmsg("error while unread.\n");
-	  exit(1);
-	}
-	prs_print_string(ctoklp, inf, outf);
-	ctoklp->prev->index++;
-	as = ADLM;
-	break;
-      default:
-	errmsg("unexpected token\n");
-	exit(1);
-      }
-      break;
+  /* state: array init */
+  p->ps = AINI;
+
+  /* skip white spaces */
+  switch(p->ps)	{
+  case AINI:
+  aini:
+    p->ps = AINI;
+    if(NULL != memchr(" \n\r\t", c, strlen(" \n\r\t")))	{
+      c = getc(inf); goto aini;
+    } else if(']' == c) {
+      /* exit array*/
+      return ctoklp->prev->index;
+    } else if(NULL != memchr("-0123456789tfn", c, strlen("-0123456789tfn")))	{
+      /* NUMBER, true, false, null */
+      p->c = c;
+      prs_print_path(outf); putc(' ', outf);
+      c = prs_print_primitive(ctoklp, inf, outf); putc('\n', outf);
+      ctoklp->prev->index++;
+    } else if('"' == c)	{
+      /* STRING */
+      p->c = c;
+      prs_print_path(outf); putc(' ', outf);
+      c = prs_print_string(ctoklp, inf, outf); putc('\n', outf);
+      ctoklp->prev->index++;
       
-    case '-': case '0': case '1' : case '2': case '3' : case '4':
-    case '5': case '6': case '7' : case '8': case '9':
-    case 't': case 'f': case 'n' :
-      switch(as)	{
-      case AINI: case AVAL:
-	if(EOF == ungetc(c, inf))	{
-	  errmsg("error while unread.\n");
-	  exit(1);
-	}
-	prs_print_primitive(ctoklp, inf, outf);
-	ctoklp->prev->index++;
-	as = ADLM;
-	break;
-      default:
-	errmsg("unexpected token\n");
-	exit(1);
-      }
-      break;
+      c = getc(inf);
+    } else if('[' == c) {
+      /* ARRAY */
+      p->c = c;
+      ctoklp->next = &ntokl;
+      r = prs_array(&ntokl, inf, outf);
 
-    case ',':
-      switch(as)	{
-      case ADLM:
-	as = AVAL;
-	break;
-      default:
-	errmsg("unexpected token\n");
-	exit(1);
-      }
-      break;
+      ctoklp->name[0] = '\0';
+      ctoklp->index = 0;
 
-    case '{':
-      switch(as)	{
-      case AINI: case AVAL:
-	ctoklp->next = &ntokl;
-	prs_object(&ntokl, inf, outf);
-	ctoklp->name[0] = '\0';
-	ctoklp->index = 0;
-	ctoklp->prev->index++;
-	as = ADLM;
-	break;
-      default:
-	errmsg("unexpected token\n");
-	exit(1);
-      }
-      break;
+      ctoklp->prev->index++;
+      ctoklp->next = NULL;
+      
+      c = getc(inf);
+    } else if('{' == c) {
+      /* OBJECT */
+      errmsg("INFO not yet.\n");
 
-    case '[':
-      switch(as)	{
-      case AINI: case AVAL:
-	ctoklp->next = &ntokl;
-	prs_array(&ntokl, inf, outf);
-	ctoklp->name[0] = '\0';
-	ctoklp->index = 0;
-	ctoklp->prev->index++;
-	as = ADLM;
-	break;
-      default:
-	errmsg("unexpected token\n");
-	exit(1);
-      }
-      break;
+      p->c = c;
+      ctoklp->next = &ntokl;
+      r = prs_object(&ntokl, inf, outf);
+    
+      ctoklp->name[0] = '\0';
+      ctoklp->index = 0;
 
-    case ']':
-      switch(as)	{
-      case AINI: case ADLM:
-	ctoklp->prev->next = NULL;
-	if(0 == ctoklp->prev->index)	{
-	  prs_print_path(inf, outf);
-	  // fprintf(outf, " []\n");
-	  fprintf(outf, "[0] \n");
-	}
-	return ctoklp->prev->index;
-      default:
-	errmsg("unexpected token\n");
-	exit(1);
-      }
-      break;
-
-    case '\t' : case '\r' : case '\n' : case ' ':
-      /* skip */
-      break;
-
-    default:
-      errmsg("error unexpected character %c.\n", c);
+      ctoklp->prev->index++;
+      ctoklp->next = NULL;
+      
+      c = getc(inf);
+    } else if(EOF == c)	{
+      errmsg("ERROR unexpected EOF.\n", c);
+      exit(1);
+    } else	{
+      errmsg("ERROR invalid characer %c.\n", c);
       exit(1);
     }
+    goto avdl;
+
+  case AVAL:
+  aval:
+    p->ps = AVAL;
+    if(NULL != memchr(" \n\r\t", c, strlen(" \n\r\t")))	{
+      c = getc(inf); goto aini;
+    } else if(NULL != memchr("-0123456789tfn", c, strlen("-0123456789tfn")))	{
+      /* NUMBER, true, false, null */
+      p->c = c;
+      prs_print_path(outf); putc(' ', outf);
+      c = prs_print_primitive(ctoklp, inf, outf); putc('\n', outf);
+      ctoklp->prev->index++;
+    } else if('"' == c)	{
+      /* STRING */
+      p->c = c;
+      prs_print_path(outf); putc(' ', outf);
+      c = prs_print_string(ctoklp, inf, outf); putc('\n', outf);
+      ctoklp->prev->index++;
+
+      c = getc(inf);
+    } else if('[' == c) {
+      /* ARRAY */
+      p->c = c;
+      ctoklp->next = &ntokl;
+      c = prs_array(&ntokl, inf, outf);
+
+      ctoklp->name[0] = '\0';
+      ctoklp->index = 0;
+
+      ctoklp->prev->index++;
+      ctoklp->next = NULL;
+
+      c = getc(inf);
+    } else if('{' == c) {
+      /* OBJECT */
+      errmsg("INFO not yet.\n");
+
+      p->c = c;
+      ctoklp->next = &ntokl;
+      c = prs_object(&ntokl, inf, outf);
+    
+      ctoklp->name[0] = '\0';
+      ctoklp->index = 0;
+
+      ctoklp->prev->index++;    
+      ctoklp->next = NULL;
+
+      c = getc(inf);
+    } else if(EOF == c)	{
+      errmsg("ERROR unexpected EOF.\n", c);
+      exit(1);
+    } else	{
+      errmsg("ERROR invalid characer %c.\n", c);
+      exit(1);
+    }
+    goto avdl;
+
+  case AVDL:
+  avdl:
+    p->ps = AVDL;
+    if(NULL != memchr(" \n\r\t", c, strlen(" \n\r\t")))	{
+      c = getc(inf); goto avdl;
+    } else if(',' == c)	{
+      c = getc(inf);
+      goto aval;
+    } else if(']' == c) {
+      /* exit array*/
+      return ctoklp->prev->index;
+    } else if(EOF == c)	{
+      errmsg("ERROR unexpected EOF.\n", c);
+      exit(1);
+    } else	{
+      errmsg("ERROR invalid characer %c.\n", c);
+      exit(1);
+    }
+
+  default:
+    errmsg("ERROR unreachable.\n");
+    exit(3);
   }
 
-  return 0;
+  errmsg("ERROR unreachable.\n");
+  exit(3);
 }
 
-enum objstat	{ OINI, KEY, KVD, OVAL, VKD };
+//  OINI, OKEY, OKVD, OVAL, OVKD,		// OBJECT
 int prs_object(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
   struct tokl ntokl;
-  int c;
-  enum objstat os = OINI;
+  int r = 0, c = getc(inf);
 
   ctoklp->name[0] = '\0';
   ctoklp->index = 0;
   ctoklp->next = NULL;
   ntokl.prev = ctoklp;
 
-  for(c = getc(inf); c != EOF; c = getc(inf))	{
-    switch(c)	{
-    case '\"':
-      if(EOF == ungetc(c, inf))	{
-	errmsg("error while unread.\n");
-	exit(1);
-      }
-      switch(os)	{
-      case OINI: case KEY:
-	prs_set_string(ctoklp, inf, outf);
-	os = KVD;
-	break;
-      case OVAL:
-	prs_print_string(ctoklp, inf, outf);
-	ctoklp->prev->index++;
-	os = VKD;
-	break;
-      default:
-	errmsg("unexpected token\n");
-	exit(1);
-      }
-      break;
-	
-    case '-': case '0': case '1' : case '2': case '3' : case '4':
-    case '5': case '6': case '7' : case '8': case '9':
-    case 't': case 'f': case 'n' :
-      switch(os)	{
-      case OVAL:
-	if(EOF == ungetc(c, inf))	{
-	  errmsg("error while unread.\n");
-	  exit(1);
-	}
-	prs_print_primitive(ctoklp, inf, outf);
-	ctoklp->prev->index++;
-	os = VKD;
-	break;
-      default:
-	errmsg("unexpected token\n");
-	exit(1);
-      }
-      break;
+  /* state: object init */
+  p->ps = OINI;
 
-    case ':':
-      switch(os)	{
-      case KVD:
-	os = OVAL;
-	break;
-      default:
-	errmsg("unexpected token\n");
-	exit(1);
-      }
-      break;
+  /* skip white spaces */
+  switch(p->ps)	{
+  case OINI:
+  oini:
+    p->ps = OINI;
+    if(NULL != memchr(" \n\r\t", c, strlen(" \n\r\t")))	{
+      c = getc(inf); goto oini;
+    } else if('}' == c) {
+      /* exit object */
+      return ctoklp->prev->index;
+    } else if('"' == c)	{
+      /* STRING */
+      p->c = c;
+      c = prs_set_string(ctoklp, inf, outf);
 
-    case ',':
-      switch(os)	{
-      case VKD:
-	os = KEY;
-	break;
-      default:
-	errmsg("unexpected token\n");
-	exit(1);
-      }
-      break;
-
-    case '{':
-      switch(os)	{
-      case OVAL:
-	ctoklp->next = &ntokl;
-	prs_object(&ntokl, inf, outf);
-	ctoklp->name[0] = '\0';
-	ctoklp->index = 0;
-	ctoklp->prev->index++;
-	os = VKD;
-	break;
-      default:
-	errmsg("unexpected token\n");
-	exit(1);
-      }
-      break;
-
-    case '[':
-      switch(os)	{
-      case OVAL:
-	ctoklp->next = &ntokl;
-	prs_array(&ntokl, inf, outf);	
-	ctoklp->name[0] = '\0';
-	ctoklp->index = 0;
-	ctoklp->prev->index++;
-	os = VKD;
-	break;
-      default:
-	errmsg("unexpected token\n");
-	exit(1);
-      }
-      break;
-
-    case '}':
-      switch(os)	{
-      case OINI: case VKD:
-	ctoklp->prev->next = NULL;
-	if(0 == ctoklp->prev->index)	{
-	  prs_print_path(inf, outf);
-	  // fprintf(outf, " {}\n");
-	  fprintf(outf, ". \n");
-	}
-	return ctoklp->prev->index;
-      default:
-	errmsg("unexpected token\n");
-	exit(1);
-      }
-      break;
-	
-    case '\t' : case '\r' : case '\n' : case ' ':
-      /* skip */
-      break;
-
-    default:
-      errmsg("error unexpected character %c.\n", c);
+      c = getc(inf);
+    } else if(EOF == c)	{
+      errmsg("ERROR unexpected EOF.\n", c);
+      exit(1);
+    } else	{
+      errmsg("ERROR invalid characer %c.\n", c);
       exit(1);
     }
+    goto okvd;
+
+  case OKEY:
+  okey:
+    p->ps = OKEY;
+    if(NULL != memchr(" \n\r\t", c, strlen(" \n\r\t")))	{
+      c = getc(inf); goto okey;
+    } else if('"' == c)	{
+      /* STRING */
+      p->c = c;
+      c = prs_set_string(ctoklp, inf, outf);
+
+      c = getc(inf);
+    } else if(EOF == c)	{
+      errmsg("ERROR unexpected EOF.\n", c);
+      exit(1);
+    } else	{
+      errmsg("ERROR invalid characer %c.\n", c);
+      exit(1);
+    }
+    goto okvd;
+
+  case OKVD:
+  okvd:
+    p->ps = OKVD;
+    if(NULL != memchr(" \n\r\t", c, strlen(" \n\r\t")))	{
+      c = getc(inf); goto okvd;
+    } else if(':' == c)	{
+      c = getc(inf);
+      goto oval;
+    } else if(EOF == c)	{
+      errmsg("ERROR unexpected EOF.\n", c);
+      exit(1);
+    } else	{
+      errmsg("ERROR invalid characer %c.\n", c);
+      exit(1);
+    }
+    errmsg("ERROR unreachabel.\n");
+    exit(3);
+
+  case OVAL:
+  oval:
+    p->ps = OVAL;
+    if(NULL != memchr(" \n\r\t", c, strlen(" \n\r\t")))	{
+      c = getc(inf); goto oval;
+    } else if(NULL != memchr("-0123456789tfn", c, strlen("-0123456789tfn")))	{
+      /* NUMBER, true, false, null */
+      p->c = c;
+      prs_print_path(outf); putc(' ', outf);
+      c = prs_print_primitive(ctoklp, inf, outf); putc('\n', outf);
+      ctoklp->prev->index++;
+    } else if('"' == c)	{
+      /* STRING */
+      p->c = c;
+      prs_print_path(outf); putc(' ', outf);
+      c = prs_print_string(ctoklp, inf, outf); putc('\n', outf);
+      ctoklp->prev->index++;
+
+      c = getc(inf);
+    } else if('[' == c) {
+      /* ARRAY */
+      errmsg("INFO not yet.\n");
+
+      p->c = c;
+      ctoklp->next = &ntokl;
+      r = prs_array(&ntokl, inf, outf);
+
+      ctoklp->name[0] = '\0';
+      ctoklp->index = 0;
+
+      ctoklp->prev->index++;
+      ctoklp->next = NULL;
+
+      c = getc(inf);
+    } else if('{' == c) {
+      /* OBJECT */
+      errmsg("INFO not yet.\n");
+
+      p->c = c;
+      ctoklp->next = &ntokl;
+      r = prs_object(&ntokl, inf, outf);
+    
+      ctoklp->name[0] = '\0';
+      ctoklp->index = 0;
+
+      ctoklp->prev->index++;    
+      ctoklp->next = NULL;
+
+      c = getc(inf);
+    } else if(EOF == c)	{
+      errmsg("ERROR unexpected EOF.\n", c);
+      exit(1);
+    } else	{
+      errmsg("ERROR invalid characer %c.\n", c);
+      exit(1);
+    }
+    goto ovkd;
+
+  case OVKD:
+  ovkd:
+    p->ps = OVAL;
+    if(NULL != memchr(" \n\r\t", c, strlen(" \n\r\t")))	{
+      c = getc(inf); goto ovkd;
+    } else if(',' == c)	{
+      c = getc(inf);
+      goto okey;
+    } else if('}' == c)	{
+      /* exit object */
+      return ctoklp->prev->index;
+    } else if(EOF == c)	{
+      errmsg("ERROR unexpected EOF.\n", c);
+      exit(1);
+    } else	{
+      errmsg("ERROR invalid characer %c.\n", c);
+      exit(1);
+    }
+
+  default:
+    errmsg("ERROR unreachable.\n");
+    exit(3);
   }
 
-  return 0;
-}
+  errmsg("ERROR unreachable.\n");
+  exit(3);
+}  
 
 int main(int argc,char *argv[]) {
   initpparam(argc, argv);
-  
-  prs_json(&toklh, stdin, stdout);
+
+  while(EOF != prs_json(&toklh, stdin, stdout));
 
   return 0;
 }
