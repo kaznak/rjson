@@ -81,7 +81,7 @@ struct parser prs, *p =&prs;
 struct tokl	{
   char name[BUFSIZ - sizeof(int) - sizeof(struct tokl*)];
   int index;
-  struct tokl *prev, *next;
+  struct tokl *next;
 };
 const size_t TOKLNLEN = BUFSIZ - sizeof(int) - sizeof(struct tokl*);
 
@@ -89,9 +89,10 @@ struct tokl toklh;
 
 int prs_print_path(FILE *outf);
 
-int prs_print_primitive(struct tokl *ctoklp, FILE *inf, FILE *outf);
-int prs_print_string(struct tokl *ctoklp, FILE *inf, FILE *outf);
+int prs_print_primitive(FILE *inf, FILE *outf);
+int prs_print_string(FILE *inf, FILE *outf);
 int prs_set_string(struct tokl *ctoklp, FILE *inf, FILE *outf);
+
 int prs_array(struct tokl *ctoklp, FILE *inf, FILE *outf);
 int prs_object(struct tokl *ctoklp, FILE *inf, FILE *outf);
 
@@ -99,10 +100,9 @@ int prs_json(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
   struct tokl ntokl;
   int r = 0, c = getc(inf);
 
-  ctoklp->name[0] = '\0';
+  strcpy(ctoklp->name, pathroot);
   ctoklp->index = 0;
   ctoklp->next = NULL;
-  ntokl.prev = ctoklp;
 
   /* state: top loop */
 
@@ -116,20 +116,17 @@ int prs_json(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
     /* NUMBER, true, false, null */
     p->c = c;
     prs_print_path(outf); putc(' ', outf);
-    r = prs_print_primitive(ctoklp, inf, outf); putc('\n', outf);
+    r = prs_print_primitive(inf, outf); putc('\n', outf);
   } else if('"' == c)	{
     /* STRING */
     p->c = c;
     prs_print_path(outf); putc(' ', outf);
-    r = prs_print_string(ctoklp, inf, outf); putc('\n', outf);
+    r = prs_print_string(inf, outf); putc('\n', outf);
   } else if('[' == c) {
     /* ARRAY */
     p->c = c;
     ctoklp->next = &ntokl;
     r = prs_array(&ntokl, inf, outf);
-
-    ctoklp->name[0] = '\0';
-    ctoklp->index = 0;
     ctoklp->next = NULL;
     
   } else if('{' == c) {
@@ -137,9 +134,6 @@ int prs_json(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
     p->c = c;
     ctoklp->next = &ntokl;
     r = prs_object(&ntokl, inf, outf);
-    
-    ctoklp->name[0] = '\0';
-    ctoklp->index = 0;
     ctoklp->next = NULL;
     
   } else if(EOF == c)	{
@@ -153,10 +147,10 @@ int prs_json(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
 }
 
 int prs_print_path(FILE *outf)	{
-  struct tokl *xtoklp;
+  struct tokl *xtoklp = &toklh;
 
-  printf("%s", pathroot);
-  for(xtoklp = &toklh; xtoklp->next != NULL; xtoklp = xtoklp->next)	{
+  printf("%s", xtoklp->name);
+  for(xtoklp = xtoklp->next; xtoklp != NULL; xtoklp = xtoklp->next)	{
     if('\0' != *(xtoklp->name))	{
       printf(pathfmt, xtoklp->name);
     } else	{
@@ -166,7 +160,7 @@ int prs_print_path(FILE *outf)	{
   return 0;
 }
 
-int prs_print_primitive(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
+int prs_print_primitive(FILE *inf, FILE *outf)	{
   int c = getc(inf);
   p->ps = PRIM;
   putc(p->c, outf);
@@ -178,7 +172,7 @@ int prs_print_primitive(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
   return (p->c = c);
 }
 
-int prs_print_string(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
+int prs_print_string(FILE *inf, FILE *outf)	{
   int i, c;
   p->ps = SSTR;
 
@@ -240,7 +234,7 @@ int prs_print_string(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
 
 int prs_set_string(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
   int i, c;
-  char *np = ctoklp->prev->name;
+  char *np = ctoklp->name;
   
   p->ps = SSTR;
 
@@ -300,10 +294,9 @@ int prs_array(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
   struct tokl ntokl;
   int r = 0, c = getc(inf);
 
-  ctoklp->name[0] = '\0';
+  *(ctoklp->name) = '\0';
   ctoklp->index = 0;
   ctoklp->next = NULL;
-  ntokl.prev = ctoklp;
 
   /* state: array init */
   p->ps = AINI;
@@ -317,52 +310,45 @@ int prs_array(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       c = getc(inf); goto aini;
     } else if(']' == c) {
       /* exit array*/
-      if(0 == ctoklp->prev->index)	{
-	ctoklp->next = NULL;
+      if(0 == ctoklp->index)	{
 	prs_print_path(outf);
 	// fprintf(outf, " []\n");
 	fprintf(outf, " \n");
       }
-      return ctoklp->prev->index;
+      return ctoklp->index;
     } else if(NULL != memchr("-0123456789tfn", c, strlen("-0123456789tfn")))	{
       /* NUMBER, true, false, null */
       p->c = c;
       prs_print_path(outf); putc(' ', outf);
-      c = prs_print_primitive(ctoklp, inf, outf); putc('\n', outf);
-      ctoklp->prev->index++;
+      c = prs_print_primitive(inf, outf); putc('\n', outf);
+
+      ctoklp->index++;
     } else if('"' == c)	{
       /* STRING */
       p->c = c;
       prs_print_path(outf); putc(' ', outf);
-      c = prs_print_string(ctoklp, inf, outf); putc('\n', outf);
-      ctoklp->prev->index++;
-      
+      c = prs_print_string(inf, outf); putc('\n', outf);
+
+      ctoklp->index++;
       c = getc(inf);
     } else if('[' == c) {
       /* ARRAY */
       p->c = c;
       ctoklp->next = &ntokl;
       r = prs_array(&ntokl, inf, outf);
-
-      ctoklp->name[0] = '\0';
-      ctoklp->index = 0;
-
-      ctoklp->prev->index++;
       ctoklp->next = NULL;
-      
+
+      ctoklp->index++;
       c = getc(inf);
     } else if('{' == c) {
       /* OBJECT */
       p->c = c;
       ctoklp->next = &ntokl;
       r = prs_object(&ntokl, inf, outf);
-    
-      ctoklp->name[0] = '\0';
-      ctoklp->index = 0;
-
-      ctoklp->prev->index++;
       ctoklp->next = NULL;
-      
+    
+
+      ctoklp->index++;
       c = getc(inf);
     } else if(EOF == c)	{
       errmsg("ERROR unexpected EOF.\n", c);
@@ -382,41 +368,33 @@ int prs_array(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       /* NUMBER, true, false, null */
       p->c = c;
       prs_print_path(outf); putc(' ', outf);
-      c = prs_print_primitive(ctoklp, inf, outf); putc('\n', outf);
-      ctoklp->prev->index++;
+      c = prs_print_primitive(inf, outf); putc('\n', outf);
+      ctoklp->index++;
     } else if('"' == c)	{
       /* STRING */
       p->c = c;
       prs_print_path(outf); putc(' ', outf);
-      c = prs_print_string(ctoklp, inf, outf); putc('\n', outf);
-      ctoklp->prev->index++;
+      c = prs_print_string(inf, outf); putc('\n', outf);
 
+      ctoklp->index++;
       c = getc(inf);
     } else if('[' == c) {
       /* ARRAY */
       p->c = c;
       ctoklp->next = &ntokl;
       c = prs_array(&ntokl, inf, outf);
-
-      ctoklp->name[0] = '\0';
-      ctoklp->index = 0;
-
-      ctoklp->prev->index++;
       ctoklp->next = NULL;
 
+      ctoklp->index++;
       c = getc(inf);
     } else if('{' == c) {
       /* OBJECT */
       p->c = c;
       ctoklp->next = &ntokl;
       c = prs_object(&ntokl, inf, outf);
-    
-      ctoklp->name[0] = '\0';
-      ctoklp->index = 0;
-
-      ctoklp->prev->index++;    
       ctoklp->next = NULL;
-
+    
+      ctoklp->index++;    
       c = getc(inf);
     } else if(EOF == c)	{
       errmsg("ERROR unexpected EOF.\n", c);
@@ -437,7 +415,7 @@ int prs_array(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       goto aval;
     } else if(']' == c) {
       /* exit array*/
-      return ctoklp->prev->index;
+      return ctoklp->index;
     } else if(EOF == c)	{
       errmsg("ERROR unexpected EOF.\n", c);
       exit(1);
@@ -463,7 +441,6 @@ int prs_object(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
   ctoklp->name[0] = '\0';
   ctoklp->index = 0;
   ctoklp->next = NULL;
-  ntokl.prev = ctoklp;
 
   /* state: object init */
   p->ps = OINI;
@@ -477,13 +454,13 @@ int prs_object(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       c = getc(inf); goto oini;
     } else if('}' == c) {
       /* exit object */
-      if(0 == ctoklp->prev->index)	{
+      if(0 == ctoklp->index)	{
 	ctoklp->next = NULL;
 	prs_print_path(outf);
 	// fprintf(outf, " {}\n");
 	fprintf(outf, ". \n");
       }
-      return ctoklp->prev->index;
+      return ctoklp->index;
     } else if('"' == c)	{
       /* STRING */
       p->c = c;
@@ -546,14 +523,14 @@ int prs_object(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       /* NUMBER, true, false, null */
       p->c = c;
       prs_print_path(outf); putc(' ', outf);
-      c = prs_print_primitive(ctoklp, inf, outf); putc('\n', outf);
-      ctoklp->prev->index++;
+      c = prs_print_primitive(inf, outf); putc('\n', outf);
+      ctoklp->index++;
     } else if('"' == c)	{
       /* STRING */
       p->c = c;
       prs_print_path(outf); putc(' ', outf);
-      c = prs_print_string(ctoklp, inf, outf); putc('\n', outf);
-      ctoklp->prev->index++;
+      c = prs_print_string(inf, outf); putc('\n', outf);
+      ctoklp->index++;
 
       c = getc(inf);
     } else if('[' == c) {
@@ -561,26 +538,18 @@ int prs_object(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       p->c = c;
       ctoklp->next = &ntokl;
       r = prs_array(&ntokl, inf, outf);
-
-      ctoklp->name[0] = '\0';
-      ctoklp->index = 0;
-
-      ctoklp->prev->index++;
       ctoklp->next = NULL;
 
+      ctoklp->index++;
       c = getc(inf);
     } else if('{' == c) {
       /* OBJECT */
       p->c = c;
       ctoklp->next = &ntokl;
       r = prs_object(&ntokl, inf, outf);
-    
-      ctoklp->name[0] = '\0';
-      ctoklp->index = 0;
-
-      ctoklp->prev->index++;    
       ctoklp->next = NULL;
-
+    
+      ctoklp->index++;    
       c = getc(inf);
     } else if(EOF == c)	{
       errmsg("ERROR unexpected EOF.\n", c);
@@ -601,7 +570,7 @@ int prs_object(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       goto okey;
     } else if('}' == c)	{
       /* exit object */
-      return ctoklp->prev->index;
+      return ctoklp->index;
     } else if(EOF == c)	{
       errmsg("ERROR unexpected EOF.\n", c);
       exit(1);
