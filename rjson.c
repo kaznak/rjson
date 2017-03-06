@@ -60,15 +60,14 @@ int eprintmsg(int lineno, char *fmt, ...)	{
 
 const char *pathroot = "$";
 const char *pathfmt = ".%s";
-// const char *indfmt = "[%04d]";
-const char *indfmt = "[%d]";
+const char *indfmt = "[%04d]";
 
 enum	pstate	{
   TOP,					// TOP loop
   OINI, OKEY, OKVD, OVAL, OVKD,		// OBJECT
   AINI, AVAL, AVDL,			// ARRAY
   PRIM,					// NUMBER, true, false, null
-  SSTR, SESC, SUNC, SUNL,		// STRING
+  SSTR, SESC, SUNC,			// STRING
   ALL
 };
 
@@ -182,11 +181,11 @@ int prs_print_string(FILE *inf, FILE *outf)	{
   int i, c;
   p->ps = SSTR;
   char uenc[5];
-  unsigned int uchi = 0, uclo = 0;
+  unsigned int uchi = 0;
 
   uenc[4] = '\0';
 
-  // putc(p->c, outf);
+  putc(p->c, outf);
 
   switch(p->ps)	{
   case SSTR:
@@ -194,7 +193,7 @@ int prs_print_string(FILE *inf, FILE *outf)	{
     p->ps = SSTR;
     switch(c = getc(inf))	{
     case '"':
-      // putc(c, outf);
+      putc(c, outf);
       return (p->c = c);
     case EOF:
       errmsg("ERROR unexpected EOF.\n");
@@ -241,6 +240,7 @@ int prs_print_string(FILE *inf, FILE *outf)	{
     case '\r':	putc('\\', outf); putc('r', outf);	break;
     case '\t':	putc('\\', outf); putc('t', outf);	break;
     default:
+      /* decode */
       if(uchi < 0x0080)	{
 	putc(uchi, outf);
       } else if(uchi < 0x0800)	{
@@ -251,36 +251,6 @@ int prs_print_string(FILE *inf, FILE *outf)	{
 	putc(((uchi >>  6) & 0b00111111) | 0b10000000, outf);
 	putc(((uchi >>  0) & 0b00111111) | 0b10000000, outf);
       }
-    }
-    goto sstr;
-    break;
-
-  case SUNL:
-  sunl:
-    /* TODO handle UTF-16 surrogate pair */
-    p->ps = SUNL;
-    if('\\' != getc(inf)	||
-       'u'  != getc(inf)	)	{
-      errmsg("ERROR unexpected sequence.\n");
-      exit(1);
-    }
-    for(i = 0; i < 4; i++)	{
-      uenc[i] = getc(inf);
-    }
-    if (uchi < 0xdc00) {
-      sscanf(uenc, "%4x", &uclo);
-      if (uclo < 0xdc00 || uclo >= 0xdfff) {
-	errmsg("ERROR invalid UCS-2 String.\n");
-	exit(1);
-      }
-      uchi = ((uchi - 0xd800) << 16) + (uclo - 0xdc00) + 0x10000;
-      uchi = unicode2utf8(uchi);
-      putc((uchi >> 16) & 0xff, outf);
-      putc((uchi >> 8) & 0xff, outf);
-      putc(uchi & 0xff, outf);
-    } else {
-      errmsg("ERROR invalid UCS-2 String\n");
-      exit(1);
     }
     goto sstr;
     break;
@@ -297,7 +267,7 @@ int prs_print_string_raw(FILE *inf, FILE *outf)	{
   int i, c;
   p->ps = SSTR;
 
-  // putc(p->c, outf);
+  putc(p->c, outf);
 
   switch(p->ps)	{
   case SSTR:
@@ -305,7 +275,7 @@ int prs_print_string_raw(FILE *inf, FILE *outf)	{
     p->ps = SSTR;
     switch(c = getc(inf))	{
     case '"':
-      // putc(c, outf);
+      putc(c, outf);
       return (p->c = c);
     case EOF:
       errmsg("ERROR unexpected EOF.\n");
@@ -327,9 +297,6 @@ int prs_print_string_raw(FILE *inf, FILE *outf)	{
       exit(1);
     case 'u':
       goto sunc;
-      //    case '/':
-      //      putc(c, outf);
-      //      goto sstr;
     default:
       putc('\\', outf); putc(c, outf);
       goto sstr;
@@ -339,7 +306,6 @@ int prs_print_string_raw(FILE *inf, FILE *outf)	{
   case SUNC:
   sunc:
     p->ps = SUNC;
-    /* TODO decode */
     putc('\\', outf); putc('u', outf);
     for(i = 0; i < 4; i++)	putc(getc(inf), outf);
     goto sstr;
@@ -433,8 +399,7 @@ int prs_array(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       /* exit array*/
       if(0 == ctoklp->index)	{
 	prs_print_path(outf);
-	// fprintf(outf, " []\n");
-	fprintf(outf, " \n");
+	fprintf(outf, " []\n");
       }
       return ctoklp->index;
     } else if(NULL != memchr("-0123456789tfn", c, strlen("-0123456789tfn")))	{
@@ -578,8 +543,7 @@ int prs_object(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       if(0 == ctoklp->index)	{
 	ctoklp->next = NULL;
 	prs_print_path(outf);
-	// fprintf(outf, " {}\n");
-	fprintf(outf, ". \n");
+	fprintf(outf, " {}\n");
       }
       return ctoklp->index;
     } else if('"' == c)	{
