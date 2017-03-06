@@ -182,7 +182,7 @@ int prs_print_string(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
   int i, c;
   p->ps = SSTR;
 
-  putc(p->c, outf);
+  // putc(p->c, outf);
 
   switch(p->ps)	{
   case SSTR:
@@ -190,7 +190,7 @@ int prs_print_string(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
     p->ps = SSTR;
     switch(c = getc(inf))	{
     case '"':
-      putc(c, outf);
+      // putc(c, outf);
       return (p->c = c);
     case EOF:
       errmsg("ERROR unexpected EOF.\n");
@@ -212,9 +212,9 @@ int prs_print_string(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       exit(1);
     case 'u':
       goto sunc;
-    case '/':
-      putc(c, outf);
-      goto sstr;
+      //    case '/':
+      //      putc(c, outf);
+      //      goto sstr;
     default:
       putc('\\', outf); putc(c, outf);
       goto sstr;
@@ -317,6 +317,12 @@ int prs_array(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       c = getc(inf); goto aini;
     } else if(']' == c) {
       /* exit array*/
+      if(0 == ctoklp->prev->index)	{
+	ctoklp->next = NULL;
+	prs_print_path(outf);
+	// fprintf(outf, " []\n");
+	fprintf(outf, " \n");
+      }
       return ctoklp->prev->index;
     } else if(NULL != memchr("-0123456789tfn", c, strlen("-0123456789tfn")))	{
       /* NUMBER, true, false, null */
@@ -471,6 +477,12 @@ int prs_object(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
       c = getc(inf); goto oini;
     } else if('}' == c) {
       /* exit object */
+      if(0 == ctoklp->prev->index)	{
+	ctoklp->next = NULL;
+	prs_print_path(outf);
+	// fprintf(outf, " {}\n");
+	fprintf(outf, ". \n");
+      }
       return ctoklp->prev->index;
     } else if('"' == c)	{
       /* STRING */
