@@ -216,9 +216,9 @@ int prs_print_string(FILE *inf, FILE *outf)	{
       exit(1);
     case 'u':
       goto sunc;
-      //    case '/':
-      //      putc(c, outf);
-      //      goto sstr;
+    case '/': case '"':
+      putc(c, outf);
+      goto sstr;
     default:
       putc('\\', outf); putc(c, outf);
       goto sstr;
