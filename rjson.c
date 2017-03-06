@@ -267,7 +267,7 @@ int prs_print_string(FILE *inf, FILE *outf)	{
     if (uchi < 0xdc00) {
       sscanf(uenc, "%4x", &uclo);
       if (uclo < 0xdc00 || uclo >= 0xdfff) {
-	errmsg("ERROR invalid UCS-2 String\n");
+	errmsg("ERROR invalid UCS-2 String.\n");
 	exit(1);
       }
       uchi = ((uchi - 0xd800) << 16) + (uclo - 0xdc00) + 0x10000;
