@@ -269,7 +269,8 @@ int prs_print_string(FILE *inf, FILE *outf)	{
       putc((uchi >> 8) & 0xff, outf);
       putc(uchi & 0xff, outf);
     } else {
-      errmsg("UCS-2 String Error\n");
+      errmsg("ERROR invalid UCS-2 String\n");
+      exit(1);
     }
     goto sstr;
     break;
