@@ -225,6 +225,7 @@ int prs_print_string(FILE *inf, FILE *outf)	{
     }
     break;
 
+    // https://ja.wikipedia.org/wiki/UTF-8
   case SUNC:
   sunc:
     p->ps = SUNC;
@@ -233,6 +234,7 @@ int prs_print_string(FILE *inf, FILE *outf)	{
     }
     sscanf(uenc, "%4x", &uchi);
     switch(uchi)	{
+      /* TODO is this enough for escaping? */
     case '"':	putc('\\', outf); putc('"', outf);	break;
     case '\\':	putc('\\', outf); putc('\\', outf);	break;
     case '\n':	putc('\\', outf); putc('n', outf);	break;
@@ -255,6 +257,7 @@ int prs_print_string(FILE *inf, FILE *outf)	{
 
   case SUNL:
   sunl:
+    /* TODO handle UTF-16 surrogate pair */
     p->ps = SUNL;
     if('\\' != getc(inf)	||
        'u'  != getc(inf)	)	{
