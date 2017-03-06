@@ -228,20 +228,27 @@ int prs_print_string(FILE *inf, FILE *outf)	{
   case SUNC:
   sunc:
     p->ps = SUNC;
-    /* TODO decode */
     for(i = 0; i < 4; i++)	{
       uenc[i] = getc(inf);
     }
     sscanf(uenc, "%4x", &uchi);
-    if (uchi >= 0xd800) {
-      goto sunl;
-    } else if (uchi & 0xff00) {
-      uchi = unicode2utf8(uchi);
-      putc((uchi >> 16) & 0xff, outf);
-      putc((uchi >> 8) & 0xff, outf);
-      putc(uchi & 0xff, outf);
-    } else {
-      putc(uchi, outf);
+    switch(uchi)	{
+    case '"':	putc('\\', outf); putc('"', outf);	break;
+    case '\\':	putc('\\', outf); putc('\\', outf);	break;
+    case '\n':	putc('\\', outf); putc('n', outf);	break;
+    case '\r':	putc('\\', outf); putc('r', outf);	break;
+    case '\t':	putc('\\', outf); putc('t', outf);	break;
+    default:
+      if(uchi < 0x0080)	{
+	putc(uchi, outf);
+      } else if(uchi < 0x0800)	{
+	putc(((uchi >>  6) & 0b00011111) | 0b11000000, outf);
+	putc(((uchi >>  0) & 0b00111111) | 0b10000000, outf);
+      } else if(uchi < 0xFFFF)	{
+	putc(((uchi >> 12) & 0b00001111) | 0b11100000, outf);
+	putc(((uchi >>  6) & 0b00111111) | 0b10000000, outf);
+	putc(((uchi >>  0) & 0b00111111) | 0b10000000, outf);
+      }
     }
     goto sstr;
     break;
