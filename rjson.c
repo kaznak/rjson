@@ -182,7 +182,7 @@ int prs_print_string(FILE *inf, FILE *outf)	{
   int i, c;
   p->ps = SSTR;
   char uenc[5];
-  unsigned int uchi, uclo;
+  unsigned int uchi = 0, uclo = 0;
 
   uenc[4] = '\0';
 
