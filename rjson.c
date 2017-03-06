@@ -68,7 +68,7 @@ enum	pstate	{
   OINI, OKEY, OKVD, OVAL, OVKD,		// OBJECT
   AINI, AVAL, AVDL,			// ARRAY
   PRIM,					// NUMBER, true, false, null
-  SSTR, SESC, SUNC,			// STRING
+  SSTR, SESC, SUNC, SUNL,		// STRING
   ALL
 };
 
@@ -172,7 +172,117 @@ int prs_print_primitive(FILE *inf, FILE *outf)	{
   return (p->c = c);
 }
 
+inline unsigned int unicode2utf8(unsigned int uc) {
+	return 
+	(0xe0 | ((uc >> 12) & 0x0f)) << 16 |
+	(0x80 | ((uc >>  6) & 0x3f)) << 8  |
+	(0x80 | (uc & 0x3f));
+}
 int prs_print_string(FILE *inf, FILE *outf)	{
+  int i, c;
+  p->ps = SSTR;
+  char uenc[5];
+  unsigned int uchi, uclo;
+
+  uenc[4] = '\0';
+
+  // putc(p->c, outf);
+
+  switch(p->ps)	{
+  case SSTR:
+  sstr:
+    p->ps = SSTR;
+    switch(c = getc(inf))	{
+    case '"':
+      // putc(c, outf);
+      return (p->c = c);
+    case EOF:
+      errmsg("ERROR unexpected EOF.\n");
+      exit(1);
+    case '\\':
+      goto sesc;
+    default:
+      putc(c, outf);
+      goto sstr;
+    }
+    break;
+    
+  case SESC:
+  sesc:
+    p->ps = SESC;
+    switch(c = getc(inf))	{
+    case EOF:
+      errmsg("ERROR unexpected EOF.\n");
+      exit(1);
+    case 'u':
+      goto sunc;
+      //    case '/':
+      //      putc(c, outf);
+      //      goto sstr;
+    default:
+      putc('\\', outf); putc(c, outf);
+      goto sstr;
+    }
+    break;
+
+  case SUNC:
+  sunc:
+    p->ps = SUNC;
+    /* TODO decode */
+    for(i = 0; i < 4; i++)	{
+      uenc[i] = getc(inf);
+    }
+    sscanf(uenc, "%4x", &uchi);
+    if (uchi >= 0xd800) {
+      goto sunl;
+    } else if (uchi & 0xff00) {
+      uchi = unicode2utf8(uchi);
+      putc((uchi >> 16) & 0xff, outf);
+      putc((uchi >> 8) & 0xff, outf);
+      putc(uchi & 0xff, outf);
+    } else {
+      putc(uchi, outf);
+    }
+    goto sstr;
+    break;
+
+  case SUNL:
+  sunl:
+    p->ps = SUNL;
+    if('\\' != getc(inf)	||
+       'u'  != getc(inf)	)	{
+      errmsg("ERROR unexpected sequence.\n");
+      exit(1);
+    }
+    for(i = 0; i < 4; i++)	{
+      uenc[i] = getc(inf);
+    }
+    if (uchi < 0xdc00) {
+      sscanf(uenc, "%4x", &uclo);
+      if (uclo < 0xdc00 || uclo >= 0xdfff) {
+	errmsg("ERROR invalid UCS-2 String\n");
+	exit(1);
+      }
+      uchi = ((uchi - 0xd800) << 16) + (uclo - 0xdc00) + 0x10000;
+      uchi = unicode2utf8(uchi);
+      putc((uchi >> 16) & 0xff, outf);
+      putc((uchi >> 8) & 0xff, outf);
+      putc(uchi & 0xff, outf);
+    } else {
+      errmsg("UCS-2 String Error\n");
+    }
+    goto sstr;
+    break;
+
+  default:
+    break;
+  }
+
+  errmsg("ERROR unreachable.\n");
+  exit(3);
+}
+
+int prs_print_string_raw(FILE *inf, FILE *outf)	{
   int i, c;
   p->ps = SSTR;
 
