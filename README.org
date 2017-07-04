@@ -1,0 +1,65 @@
+* COMMENT -*- Mode: org; -*-
+
+#+TITLE: rjson
+
+* About
+
+JSON parser to line oriented text in JSON PATH and value format.
+
+* usage
+
+#+BEGIN_SRC sh
+./rjson <<EOF
+{
+  "firstName": "John",
+  "lastName": "Smith",
+  "isAlive": true,
+  "age": 25,
+  "address": {
+    "streetAddress": "21 2nd Street",
+    "city": "New York",
+    "state": "NY",
+    "postalCode": "10021-3100"
+  },
+  "phoneNumbers": [
+    {
+      "type": "home",
+      "number": "212 555-1234"
+    },
+    {
+      "type": "office",
+      "number": "646 555-4567"
+    },
+    {
+      "type": "mobile",
+      "number": "123 456-7890"
+    }
+  ],
+  "children": [],
+  "spouse": null
+}
+EOF
+#+END_SRC
+
+* File tree
+
++ .emacs.d
+  + .git       : git repository
+  - .gitignore : git ignoring file definition
+  - README.org : This README file
+  - LICENSE    : About License
+
+  - Makefile   : Makefile of rjson.c
+  - rjson.c    : rjson source
+
+* Known vulnerability
+
+There could be overflow bug.
+
+* References
+JavaScript Object Notation
+https://en.wikipedia.org/wiki/JSON
+
+Introducing JSON
+http://www.json.org/
+
