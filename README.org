@@ -48,11 +48,12 @@ EOF
   - .gitignore : git ignoring file definition
   - README.org : This README file
   - LICENSE    : About License
-
-  - Makefile   : Makefile of rjson.c
-  - rjson.c    : rjson source
-
   - rc         : environment setup file
+
+  + src        : program sources directory
+    - Makefile   : Makefile of rjson.c
+    - rjson.c    : rjson source
+
   + test       : test program directory
 
 * Known vulnerability

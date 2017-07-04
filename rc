@@ -1,2 +1,2 @@
 
-PATH=$PWD:$PATH
+PATH=$PWD/src:$PATH
