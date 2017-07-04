@@ -1,7 +1,11 @@
 
-CC=gcc -Wall -O3 
+CC=gcc -Wall -O3
+# CC=gcc -Wall -O3 -static
 
-rjson : rjson.o
+all : rjson
+	strip rjson
+
+rjson : rjson.c
 
 clean :
 	rm -f rjson
