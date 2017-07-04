@@ -52,6 +52,9 @@ EOF
   - Makefile   : Makefile of rjson.c
   - rjson.c    : rjson source
 
+  - rc         : environment setup file
+  + test       : test program directory
+
 * Known vulnerability
 
 There could be overflow bug.
