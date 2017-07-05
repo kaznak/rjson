@@ -71,6 +71,8 @@ enum	pstate	{
   ALL
 };
 
+char *path;
+
 struct parser	{
   enum pstate ps;
   char c;
@@ -674,6 +676,16 @@ int prs_object(struct tokl *ctoklp, FILE *inf, FILE *outf)	{
 
 int main(int argc,char *argv[]) {
   initpparam(argc, argv);
+
+  if(NULL == (path = malloc(BUFSIZ)))	{
+    errmsg("ERROR fatal\n");
+    return 1;
+  }
+    
+  if(path != strcpy(path, pathroot))	{
+    errmsg("ERROR fatal\n");
+    return 1;
+  }
 
   while(EOF != prs_json(&toklh, stdin, stdout));
 
