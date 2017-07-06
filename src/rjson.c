@@ -118,7 +118,8 @@ int prs_json()	{
   }
   else if(EOF == p->c)	{
     ;
-  } else	{
+  }
+  else	{
     errmsg("ERROR invalid characer %c.\n", p->c);
     exit(1);
   }
