@@ -55,6 +55,10 @@ int eprintmsg(int lineno, char *fmt, ...)	{
 }
 #define errmsg(...) eprintmsg(__LINE__, __VA_ARGS__)
 
+void err_unreachable()	{
+  errmsg("ERROR unreachable.\n");
+  exit(3);
+}
 
 /* parse *//////////////////////////////////////////////////////////////////////////////////
 
@@ -87,6 +91,7 @@ int init_parser(FILE *inf, FILE *outf)	{
 }
 
 int prs_primitive();
+int prs_string();
 
 /* prs_json *//////////////////////////////////////////////////////////////////////////////////
 int prs_json()	{
@@ -105,6 +110,9 @@ int prs_json()	{
     /* NUMBER, true, false, null */
     p->c = prs_primitive();
   }
+  else if('"' == p->c)	{
+    /* STRING */
+    p->c = prs_string();
   }
   else if(EOF == p->c)	{
     return EOF;
@@ -132,6 +140,90 @@ int prs_primitive()	{
 
   return p->c;
 }
+
+/* prs_string *//////////////////////////////////////////////////////////////////////////////////
+
+inline unsigned int unicode2utf8(unsigned int uc) {
+	return 
+	(0xe0 | ((uc >> 12) & 0x0f)) << 16 |
+	(0x80 | ((uc >>  6) & 0x3f)) << 8  |
+	(0x80 | (uc & 0x3f));
+}
+
+int prs_string()	{
+
+  int i;
+  char uenc[5];
+  unsigned int uchi = 0;
+  uenc[4] = '\0';
+
+  printf("%s ", p->path);
+  putc(p->c, p->outf);
+  
+ str:
+  switch(p->c = getc(p->inf))	{
+  case '"':
+    putc(p->c, p->outf);
+    putc('\n', p->outf);
+    return (p->c = getc(p->inf));
+  case '\\':
+    goto esc;
+  case EOF:
+    errmsg("ERROR unexpected EOF.\n");
+    exit(1);
+  default:
+    putc(p->c, p->outf);
+    goto str;
+  }
+  err_unreachable();
+
+ esc:
+  switch(p->c = getc(p->inf))	{
+  case 'u':
+    goto unc;
+  case '/': case '"':
+    putc(p->c, p->outf);
+    goto str;
+  case EOF:
+    errmsg("ERROR unexpected EOF.\n");
+    exit(1);
+  default:
+    putc('\\', p->outf); putc(p->c, p->outf);
+    goto str;
+  }
+  err_unreachable();
+
+ unc:
+  // https://ja.wikipedia.org/wiki/UTF-8
+  for(i = 0; i < 4; i++)	{
+    uenc[i] = getc(p->inf);
+  }
+  sscanf(uenc, "%4x", &uchi);
+  switch(uchi)	{
+    /* TODO is this enough for escaping? */
+  case '"':	putc('\\', p->outf); putc('"',  p->outf);	break;
+  case '\\':	putc('\\', p->outf); putc('\\', p->outf);	break;
+  case '\n':	putc('\\', p->outf); putc('n',  p->outf);	break;
+  case '\r':	putc('\\', p->outf); putc('r',  p->outf);	break;
+  case '\t':	putc('\\', p->outf); putc('t',  p->outf);	break;
+  default:
+    /* decode */
+    if(uchi < 0x0080)	{
+      putc(uchi, p->outf);
+    } else if(uchi < 0x0800)	{
+      putc(((uchi >>  6) & 0b00011111) | 0b11000000, p->outf);
+      putc(((uchi >>  0) & 0b00111111) | 0b10000000, p->outf);
+    } else if(uchi < 0xFFFF)	{
+      putc(((uchi >> 12) & 0b00001111) | 0b11100000, p->outf);
+      putc(((uchi >>  6) & 0b00111111) | 0b10000000, p->outf);
+      putc(((uchi >>  0) & 0b00111111) | 0b10000000, p->outf);
+    }
+  }
+  goto str;
+
+  err_unreachable();
+}
+
 
 /* main *//////////////////////////////////////////////////////////////////////////////////
 
