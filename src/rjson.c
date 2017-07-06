@@ -85,20 +85,25 @@ int init_parser(FILE *inf, FILE *outf)	{
   return 1;
 }
 
+int prs_skip_ws()	{
+  const char *white_spaces = " \n\r\t";
+
+  while(NULL != memchr(white_spaces, p->c, strlen(white_spaces)))
+    p->c = getc(p->inf);
+
+  return p->c;
+}
+
 int prs_primitive();
 int prs_string();
 
 /* prs_json *//////////////////////////////////////////////////////////////////////////////////
 int prs_json()	{
-  const char *white_spaces = " \n\r\t";
   const char *primitive_headder = "-0123456789tfn";
   
-  /* skip white spaces */
- top:
-  if(NULL != memchr(white_spaces, p->c, strlen(white_spaces)))	{
-    p->c = getc(p->inf); goto top;
-  }
-  else if(NULL != memchr(primitive_headder, p->c, strlen(primitive_headder)))	{
+  prs_skip_ws();
+
+  if(NULL != memchr(primitive_headder, p->c, strlen(primitive_headder)))	{
     /* NUMBER, true, false, null */
     p->c = prs_primitive();
   }
