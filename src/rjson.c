@@ -58,14 +58,13 @@ int eprintmsg(int lineno, char *fmt, ...)	{
 /* parse *//////////////////////////////////////////////////////////////////////////////////
 
 const char *pathroot = "$";
-const char *pathfmt = ".%s";
+const char *pathdlm = ".";
 const char *indfmt = "[%04d]";
 
 struct parser	{
   char c;
 
-  char *path;
-  size_t phead;
+  char *path, *phead;
 
   FILE *inf, *outf;
 } prs, *p = &prs;
@@ -78,7 +77,7 @@ int init_parser(FILE *inf, FILE *outf)	{
     return 0;
   }
 
-  p->phead = strlen(pathroot);
+  p->phead = p->path + strlen(pathroot);
   p->inf = inf; p->outf = outf;
   p->c = getc(inf);
 
@@ -94,17 +93,23 @@ int prs_skip_ws()	{
   return p->c;
 }
 
+int is_primitive()	{
+  const char *primitive_headder = "-0123456789tfn";
+
+  return (NULL != memchr(primitive_headder, p->c, strlen(primitive_headder)));
+}
+
 int prs_primitive();
 int prs_string();
 int prs_array();
+int prs_object();
 
 /* prs_json *//////////////////////////////////////////////////////////////////////////////////
 int prs_json()	{
-  const char *primitive_headder = "-0123456789tfn";
   
   prs_skip_ws();
 
-  if(NULL != memchr(primitive_headder, p->c, strlen(primitive_headder)))	{
+  if(is_primitive())	{
     /* NUMBER, true, false, null */
     p->c = prs_primitive();
   }
@@ -115,6 +120,10 @@ int prs_json()	{
   else if('[' == p->c) {
     /* ARRAY */
     p->c = prs_array();
+  }
+  else if('{' == p->c) {
+    /* OBJECT */
+    p->c = prs_object();
   }
   else if(EOF == p->c)	{
     ;
@@ -232,9 +241,7 @@ int prs_string()	{
 
 /* prs_array *//////////////////////////////////////////////////////////////////////////////////
 int prs_array()	{
-  const char *primitive_headder = "-0123456789tfn";
-  
-  size_t phsav = p->phead;
+  char *phsav = p->phead;
 
   int index = 0;
   int (*action)();
@@ -245,15 +252,14 @@ int prs_array()	{
 
   if(']' == p->c) {
     /* exit array*/
-    p->phead = phsav;
     return (p->c = getc(p->inf));
   }
   goto val2;
 
- val:
+ val:	/* value expected */
   prs_skip_ws();
  val2:
-  if(NULL != memchr(primitive_headder, p->c, strlen(primitive_headder)))	{
+  if(is_primitive())	{
     /* NUMBER, true, false, null */
     action = prs_primitive;
   }
@@ -265,6 +271,10 @@ int prs_array()	{
     /* ARRAY */
     action = prs_array;
   }
+  else if('{' == p->c) {
+    /* OBJECT */
+    action = prs_object;
+  }
   else if(EOF == p->c)	{
     errmsg("ERROR unexpected EOF.\n");
     exit(1);
@@ -275,15 +285,17 @@ int prs_array()	{
   }
 
   /* set path */
-  if(0 > sprintf((p->path + p->phead), indfmt, index))	{
+  if(0 > sprintf(p->phead, indfmt, index))	{
     errmsg("ERROR fatal.\n", p->c);
     exit(3);
   }
+  p->phead += strlen(p->phead);
   p->c = action();
+  p->phead = phsav;
   index++;
   goto vdl;
 
- vdl:
+ vdl:	/* delimitor or exit expected */
   prs_skip_ws();
   if(',' == p->c) {
     /* next value */
@@ -291,7 +303,6 @@ int prs_array()	{
   }
   else if(']' == p->c) {
     /* exit array*/
-    p->phead = phsav;
     return (p->c = getc(p->inf));
   }
   else if(EOF == p->c)	{
@@ -303,6 +314,193 @@ int prs_array()	{
     exit(1);
   }
 
+  errmsg("ERROR unreachable.\n");
+  exit(3);
+}
+
+/* prs_object *//////////////////////////////////////////////////////////////////////////////////
+int prs_object_key()	{
+  char *c;
+
+  int i;
+  char uenc[5];
+  unsigned int uchi = 0;
+  uenc[4] = '\0';
+
+  for(c = pathdlm; '\0' != *c; *(p->phead++) = *(c++));
+  
+ str:
+  switch(p->c = getc(p->inf))	{
+  case '"':
+    *p->phead = '\0';
+    return (p->c = getc(p->inf));
+  case '\\':
+    goto esc;
+  case EOF:
+    errmsg("ERROR unexpected EOF.\n");
+    exit(1);
+  default:
+    *(p->phead++) = p->c;
+    goto str;
+  }
+  errmsg("ERROR unreachable.\n");
+  exit(3);
+
+ esc:
+  switch(p->c = getc(p->inf))	{
+  case 'u':
+    goto unc;
+  case '/': case '"':
+    *(p->phead++) = p->c;
+    goto str;
+  case EOF:
+    errmsg("ERROR unexpected EOF.\n");
+    exit(1);
+  default:
+    *(p->phead++) = '\\'; *(p->phead++) = p->c;
+    goto str;
+  }
+  errmsg("ERROR unreachable.\n");
+  exit(3);
+
+ unc:
+  // https://ja.wikipedia.org/wiki/UTF-8
+  for(i = 0; i < 4; i++)	{
+    uenc[i] = getc(p->inf);
+  }
+  sscanf(uenc, "%4x", &uchi);
+  switch(uchi)	{
+    /* TODO is this enough for escaping? */
+  case '"':	*(p->phead++) = '\\'; *(p->phead++) = '"';	break;
+  case '\\':	*(p->phead++) = '\\'; *(p->phead++) = '\\';	break;
+  case '\n':	*(p->phead++) = '\\'; *(p->phead++) = '\n';	break;
+  case '\r':	*(p->phead++) = '\\'; *(p->phead++) = '\r';	break;
+  case '\t':	*(p->phead++) = '\\'; *(p->phead++) = '\t';	break;
+    
+  default:
+    /* decode */
+    if(uchi < 0x0080)	{
+      *(p->phead++) = uchi;
+    } else if(uchi < 0x0800)	{
+      *(p->phead++) = (((uchi >>  6) & 0b00011111) | 0b11000000);
+      *(p->phead++) = (((uchi >>  0) & 0b00111111) | 0b10000000);
+    } else if(uchi < 0xFFFF)	{
+      *(p->phead++) = (((uchi >> 12) & 0b00001111) | 0b11100000);
+      *(p->phead++) = (((uchi >>  6) & 0b00111111) | 0b10000000);
+      *(p->phead++) = (((uchi >>  0) & 0b00111111) | 0b10000000);
+    }
+  }
+  goto str;
+
+  errmsg("ERROR unreachable.\n");
+  exit(3);
+}
+
+int prs_object()	{
+  char *phsav = p->phead;
+
+  p->c = getc(p->inf);
+
+  prs_skip_ws();
+  if('}' == p->c) {
+    /* exit object */
+    return (p->c = getc(p->inf));
+  }
+  goto key2;
+
+ key:
+  prs_skip_ws();
+ key2:
+  if('"' == p->c)	{
+    /* STRING */
+    p->c = prs_object_key();
+  }
+  else if(EOF == p->c)	{
+    errmsg("ERROR unexpected EOF.\n");
+    exit(1);
+  }
+  else	{
+    errmsg("ERROR invalid characer %c.\n", p->c);
+    exit(1);
+  }
+  goto kvd;
+
+ kvd:
+  prs_skip_ws();
+  if(':' == p->c)	{
+    p->c = getc(p->inf);
+    goto val;
+  }
+  else if(EOF == p->c)	{
+    errmsg("ERROR unexpected EOF.\n");
+    exit(1);
+  }
+  else	{
+    errmsg("ERROR invalid characer %c.\n", p->c);
+    exit(1);
+  }
+  errmsg("ERROR unreachable.\n");
+  exit(3);
+
+ val:
+  prs_skip_ws();
+  if(is_primitive())	{
+    /* NUMBER, true, false, null */
+    p->c = prs_primitive();
+    p->phead = phsav;
+    goto vkd;
+  }
+  else if('"' == p->c)	{
+    /* STRING */
+    p->c = prs_string();
+    p->phead = phsav;
+    goto vkd;
+  }
+  else if('[' == p->c) {
+    /* ARRAY */
+    p->c = prs_array();
+    p->phead = phsav;
+    goto vkd;
+  }
+  else if('{' == p->c) {
+    /* OBJECT */
+    p->c = prs_object();
+    p->phead = phsav;
+    goto vkd;
+  }
+  else if(EOF == p->c)	{
+    errmsg("ERROR unexpected EOF.\n");
+    exit(1);
+  }
+  else	{
+    errmsg("ERROR invalid characer %c.\n", p->c);
+    exit(1);
+  }
+  errmsg("ERROR unreachable.\n");
+  exit(3);
+
+ vkd:
+  prs_skip_ws();
+  if(is_primitive())	{
+    /* NUMBER, true, false, null */
+    p->c = prs_primitive();
+  }
+  else if(',' == p->c)	{
+    p->c = getc(p->inf);
+    goto key;
+  }
+  else if('}' == p->c) {
+    /* exit object */
+    return (p->c = getc(p->inf));
+  }
+  else if(EOF == p->c)	{
+    errmsg("ERROR unexpected EOF.\n");
+    exit(1);
+  }
+  else	{
+    errmsg("ERROR invalid characer %c.\n", p->c);
+    exit(1);
+  }
   errmsg("ERROR unreachable.\n");
   exit(3);
 }
