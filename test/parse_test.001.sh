@@ -57,7 +57,7 @@ rjson <<EOF	> $tmp-output
 }
 EOF
 
-if cmp $tmp-expected $tmp-output 2> /dev/null ; then
+if diff $tmp-expected $tmp-output 2> /dev/null ; then
     echo "$pname $stime OK"
     exit 0
 else
