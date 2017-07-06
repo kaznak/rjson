@@ -156,10 +156,10 @@ int prs_primitive()	{
 /* prs_string *//////////////////////////////////////////////////////////////////////////////////
 
 inline unsigned int unicode2utf8(unsigned int uc) {
-	return 
-	(0xe0 | ((uc >> 12) & 0x0f)) << 16 |
-	(0x80 | ((uc >>  6) & 0x3f)) << 8  |
-	(0x80 | (uc & 0x3f));
+  return 
+    (0xe0 | ((uc >> 12) & 0x0f)) << 16 |
+    (0x80 | ((uc >>  6) & 0x3f)) << 8  |
+    (0x80 | (uc & 0x3f));
 }
 
 int prs_string()	{
@@ -326,7 +326,7 @@ int prs_object_key()	{
   char uenc[5];
   unsigned int uchi = 0;
   uenc[4] = '\0';
-
+  
   for(c = pathdlm; '\0' != *c; *(p->phead++) = *(c++));
   
  str:
