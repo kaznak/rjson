@@ -96,6 +96,7 @@ int prs_skip_ws()	{
 
 int prs_primitive();
 int prs_string();
+int prs_array();
 
 /* prs_json *//////////////////////////////////////////////////////////////////////////////////
 int prs_json()	{
@@ -110,6 +111,10 @@ int prs_json()	{
   else if('"' == p->c)	{
     /* STRING */
     p->c = prs_string();
+  }
+  else if('[' == p->c) {
+    /* ARRAY */
+    p->c = prs_array();
   }
   else if(EOF == p->c)	{
     ;
@@ -224,6 +229,82 @@ int prs_string()	{
   exit(3);
 }
 
+/* prs_array *//////////////////////////////////////////////////////////////////////////////////
+int prs_array()	{
+  const char *primitive_headder = "-0123456789tfn";
+  
+  size_t phsav = p->phead;
+
+  int index = 0;
+  int (*action)();
+
+  p->c = getc(p->inf);
+
+  prs_skip_ws();
+
+  if(']' == p->c) {
+    /* exit array*/
+    p->phead = phsav;
+    return (p->c = getc(p->inf));
+  }
+  goto val2;
+
+ val:
+  prs_skip_ws();
+ val2:
+  if(NULL != memchr(primitive_headder, p->c, strlen(primitive_headder)))	{
+    /* NUMBER, true, false, null */
+    action = prs_primitive;
+  }
+  else if('"' == p->c)	{
+    /* STRING */
+    action = prs_string;
+  }
+  else if('[' == p->c) {
+    /* ARRAY */
+    action = prs_array;
+  }
+  else if(EOF == p->c)	{
+    errmsg("ERROR unexpected EOF.\n");
+    exit(1);
+  }
+  else	{
+    errmsg("ERROR invalid characer %c.\n", p->c);
+    exit(1);
+  }
+
+  /* set path */
+  if(0 > sprintf((p->path + p->phead), indfmt, index))	{
+    errmsg("ERROR fatal.\n", p->c);
+    exit(3);
+  }
+  p->c = action();
+  index++;
+  goto vdl;
+
+ vdl:
+  prs_skip_ws();
+  if(',' == p->c) {
+    /* next value */
+    p->c = getc(p->inf); goto val;
+  }
+  else if(']' == p->c) {
+    /* exit array*/
+    p->phead = phsav;
+    return (p->c = getc(p->inf));
+  }
+  else if(EOF == p->c)	{
+    errmsg("ERROR unexpected EOF.\n");
+    exit(1);
+  }
+  else	{
+    errmsg("ERROR invalid characer %c.\n", p->c);
+    exit(1);
+  }
+
+  errmsg("ERROR unreachable.\n");
+  exit(3);
+}
 
 /* main *//////////////////////////////////////////////////////////////////////////////////
 
