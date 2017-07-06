@@ -252,6 +252,11 @@ int prs_array()	{
 
   if(']' == p->c) {
     /* exit array*/
+    if(0 > sprintf(p->phead, indfmt, index))	{
+      errmsg("ERROR fatal.\n", p->c);
+      exit(3);
+    }
+    printf("%s []\n", p->path);
     return (p->c = getc(p->inf));
   }
   goto val2;
@@ -303,6 +308,13 @@ int prs_array()	{
   }
   else if(']' == p->c) {
     /* exit array*/
+    if(0 == index)	{
+      if(0 > sprintf(p->phead, indfmt, index))	{
+	errmsg("ERROR fatal.\n", p->c);
+	exit(3);
+      }
+      printf("%s []\n", p->path);
+    }
     return (p->c = getc(p->inf));
   }
   else if(EOF == p->c)	{
