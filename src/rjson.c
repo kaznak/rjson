@@ -55,11 +55,6 @@ int eprintmsg(int lineno, char *fmt, ...)	{
 }
 #define errmsg(...) eprintmsg(__LINE__, __VA_ARGS__)
 
-void err_unreachable()	{
-  errmsg("ERROR unreachable.\n");
-  exit(3);
-}
-
 /* parse *//////////////////////////////////////////////////////////////////////////////////
 
 const char *pathroot = "$";
@@ -98,9 +93,6 @@ int prs_json()	{
   const char *white_spaces = " \n\r\t";
   const char *primitive_headder = "-0123456789tfn";
   
-  int r = 0;
-  size_t phsav = p->phead;
-
   /* skip white spaces */
  top:
   if(NULL != memchr(white_spaces, p->c, strlen(white_spaces)))	{
@@ -115,12 +107,12 @@ int prs_json()	{
     p->c = prs_string();
   }
   else if(EOF == p->c)	{
-    return EOF;
+    ;
   } else	{
     errmsg("ERROR invalid characer %c.\n", p->c);
     exit(1);
   }
-  
+
   return p->c;
 }
 
@@ -175,7 +167,8 @@ int prs_string()	{
     putc(p->c, p->outf);
     goto str;
   }
-  err_unreachable();
+  errmsg("ERROR unreachable.\n");
+  exit(3);
 
  esc:
   switch(p->c = getc(p->inf))	{
@@ -191,7 +184,8 @@ int prs_string()	{
     putc('\\', p->outf); putc(p->c, p->outf);
     goto str;
   }
-  err_unreachable();
+  errmsg("ERROR unreachable.\n");
+  exit(3);
 
  unc:
   // https://ja.wikipedia.org/wiki/UTF-8
@@ -221,7 +215,8 @@ int prs_string()	{
   }
   goto str;
 
-  err_unreachable();
+  errmsg("ERROR unreachable.\n");
+  exit(3);
 }
 
 
