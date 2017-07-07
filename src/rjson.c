@@ -97,7 +97,7 @@ int init_parser(unsigned int width, FILE *inf, FILE *outf)	{
   return 1;
 }
 
-int prs_skip_ws()	{
+inline int prs_skip_ws()	{
   const char *white_spaces = " \n\r\t";
 
   while(NULL != memchr(white_spaces, p->c, strlen(white_spaces)))
@@ -106,7 +106,7 @@ int prs_skip_ws()	{
   return p->c;
 }
 
-int is_primitive()	{
+inline int is_primitive()	{
   const char *primitive_headder = "-0123456789tfn";
 
   return (NULL != memchr(primitive_headder, p->c, strlen(primitive_headder)));
