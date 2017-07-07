@@ -59,7 +59,7 @@ int eprintmsg(int lineno, char *fmt, ...)	{
 
 const char *pathroot = "$";
 const char *pathdlm = ".";
-const char *indfmt = "[%04d]";
+char indfmt[BUFSIZ];
 
 struct parser	{
   char c;
@@ -69,10 +69,23 @@ struct parser	{
   FILE *inf, *outf;
 } prs, *p = &prs;
 
-int init_parser(FILE *inf, FILE *outf)	{
+int init_parser(unsigned int width, FILE *inf, FILE *outf)	{
 
-  if(!((p->path = malloc(BUFSIZ))       	&&
-       (p->path == strcpy(p->path, pathroot))	))	{
+  if(0 == width)
+    sprintf(indfmt, "[%%d]");
+  else if (1024 > width)
+    sprintf(indfmt, "[%%0%dd]", width);
+  else	{
+    errmsg("ERROR width too large\n");
+    return 0;
+  }
+
+  if(!(p->path = malloc(BUFSIZ)))	{
+    errmsg("ERROR fatal\n");
+    return 0;
+  }
+
+  if(!(p->path == strcpy(p->path, pathroot)))	{
     errmsg("ERROR fatal\n");
     return 0;
   }
@@ -520,9 +533,13 @@ int prs_object()	{
 /* main *//////////////////////////////////////////////////////////////////////////////////
 
 int main(int argc,char *argv[]) {
-  if(!(initpparam(argc, argv)		&&
-       init_parser(stdin, stdout)	))
-    return 1;
+  unsigned int index_width = 0;
+
+  if(!initpparam(argc, argv))
+    return 3;
+
+  if(!init_parser(index_width, stdin, stdout))
+    return 3;
 
   while(EOF != prs_json());
 
