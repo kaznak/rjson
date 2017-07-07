@@ -26,7 +26,7 @@ $.children[0000] []
 $.spouse null
 EOF
 
-rjson <<EOF	> $tmp-output
+rjson -w 4 <<EOF	> $tmp-output
 {
   "firstName": "John",
   "lastName": "Smith",

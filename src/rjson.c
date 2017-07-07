@@ -69,7 +69,7 @@ struct parser	{
   FILE *inf, *outf;
 } prs, *p = &prs;
 
-int init_parser(unsigned int width, FILE *inf, FILE *outf)	{
+int init_parser(int width, FILE *inf, FILE *outf)	{
 
   if(0 == width)
     sprintf(indfmt, "[%%d]");
@@ -533,10 +533,13 @@ int prs_object()	{
 /* main *//////////////////////////////////////////////////////////////////////////////////
 
 int main(int argc,char *argv[]) {
-  unsigned int index_width = 0;
+  int index_width = 0;
 
   if(!initpparam(argc, argv))
     return 3;
+
+  if(argc > 2 && !strcmp(argv[1],"-w"))
+    index_width = atoi(argv[2]);
 
   if(!init_parser(index_width, stdin, stdout))
     return 3;
