@@ -41,6 +41,27 @@ JSON parser to line oriented text in JSON PATH and value format.
 EOF
 #+END_SRC
 
+The output is like below.
+
+#+BEGIN_SRC
+$.firstName "John"
+$.lastName "Smith"
+$.isAlive true
+$.age 25
+$.address.streetAddress "21 2nd Street"
+$.address.city "New York"
+$.address.state "NY"
+$.address.postalCode "10021-3100"
+$.phoneNumbers[0].type "home"
+$.phoneNumbers[0].number "212 555-1234"
+$.phoneNumbers[1].type "office"
+$.phoneNumbers[1].number "646 555-4567"
+$.phoneNumbers[2].type "mobile"
+$.phoneNumbers[2].number "123 456-7890"
+$.children[0] []
+$.spouse null
+#+END_SRC
+
 * File tree
 
 + .emacs.d
@@ -55,10 +76,6 @@ EOF
     - rjson.c    : rjson source
 
   + test       : test program directory
-
-* Known vulnerability
-
-There could be overflow bug.
 
 * References
 JavaScript Object Notation
