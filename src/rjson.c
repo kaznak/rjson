@@ -12,8 +12,9 @@
 
 /* initprog *//////////////////////////////////////////////////////////////////////////////////
 
-const char *tfmt = "%Y%m%d%H%M%S";
-const size_t tfmt_len = 15;
+// YYYYMMDDHHMMSSZZZ
+const char *tfmt = "%Y%m%d%H%M%S%Z";
+const size_t stime_len = 32;
  
 char *pname;
 time_t stime_t;
@@ -24,22 +25,23 @@ int initpparam(int argc,char *argv[])	{
   struct tm *tm;
 
   // pname
-  pname = argv[0];
-
+  if('\0' == *(pname = argv[0]))
+    return 3;
+  
   // stime
-  if(time(&stime_t) < 0)
-    return -1;
-  if((tm = localtime(&stime_t)) == NULL)
-    return -1;
-  if(NULL == (stime_s = malloc(tfmt_len)))
-    return -1;
-  if(strftime(stime_s, sizeof(stime_s), tfmt, tm) == 0)
-    return -1;
+  if(0 > time(&stime_t))
+    return 3;
+  if(NULL == (tm = localtime(&stime_t)))
+    return 3;
+  if(NULL == (stime_s = malloc(stime_len)))
+    return 3;
+  if(0 == strftime(stime_s, stime_len, tfmt, tm))
+    return 3;
 
   // pid
   pid = getpid();
   
-  return 1;
+  return 0;
 }
 
 int eprintmsg(int lineno, char *fmt, ...)	{
@@ -64,9 +66,7 @@ int index_width = 0;
 
 struct parser	{
   char c;
-
   char *path, *phead;
-
   FILE *inf, *outf;
 } prs, *p = &prs;
 
@@ -79,24 +79,24 @@ int init_parser(int width, FILE *inf, FILE *outf)	{
     sprintf(indfmt, "[%%0%dd]", width);
   else	{
     errmsg("ERROR width too large\n");
-    return 0;
+    return 1;
   }
 
   if(!(p->path = malloc(BUFSIZ)))	{
     errmsg("ERROR fatal\n");
-    return 0;
+    return 3;
   }
 
   if(!(p->path == strcpy(p->path, pathroot)))	{
     errmsg("ERROR fatal\n");
-    return 0;
+    return 3;
   }
 
   p->phead = p->path + strlen(pathroot);
   p->inf = inf; p->outf = outf;
   p->c = getc(inf);
 
-  return 1;
+  return 0;
 }
 
 inline int prs_skip_ws()	{
@@ -535,16 +535,16 @@ int prs_object()	{
 /* main *//////////////////////////////////////////////////////////////////////////////////
 
 int main(int argc,char *argv[]) {
-  int index_width = 0;
+  int index_width = 0, r;
 
-  if(!initpparam(argc, argv))
-    return 3;
+  if(0 != (r = initpparam(argc, argv)))
+    return r;
 
   if(argc > 2 && !strcmp(argv[1],"-w"))
     index_width = atoi(argv[2]);
 
-  if(!init_parser(index_width, stdin, stdout))
-    return 3;
+  if(0 != (r = init_parser(index_width, stdin, stdout)))
+    return r;
 
   while(EOF != prs_json());
 
