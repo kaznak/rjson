@@ -60,6 +60,7 @@ int eprintmsg(int lineno, char *fmt, ...)	{
 const char *pathroot = "$";
 const char *pathdlm = ".";
 char indfmt[BUFSIZ];
+int index_width = 0;
 
 struct parser	{
   char c;
@@ -70,6 +71,7 @@ struct parser	{
 } prs, *p = &prs;
 
 int init_parser(int width, FILE *inf, FILE *outf)	{
+  index_width = width;
 
   if(0 == width)
     sprintf(indfmt, "[%%d]");
