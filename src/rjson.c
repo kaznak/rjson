@@ -114,6 +114,13 @@ inline int is_primitive()	{
   return (NULL != memchr(primitive_headder, p->c, strlen(primitive_headder)));
 }
 
+inline void check_path_buffer()	{
+  if(BUFSIZ - 32 < (p->phead - p->path))	{
+    errmsg("ERROR path buffer depleted.\n");
+    exit(2);
+  }
+}
+
 int prs_primitive();
 int prs_string();
 int prs_array();
@@ -255,6 +262,28 @@ int prs_string()	{
 }
 
 /* prs_array *//////////////////////////////////////////////////////////////////////////////////
+inline int set_path_index(int index)	{
+  if(index < 0)	{
+    errmsg("ERROR index overflow.\n", p->c);
+    exit(2);
+  }
+
+  check_path_buffer();
+
+  if(0 > sprintf(p->phead, indfmt, index))	{
+    errmsg("ERROR fatal.\n", p->c);
+    exit(3);
+  }
+
+  return 1;
+}
+
+inline int unset_path_index(char *phsav)	{
+  p->phead = phsav;
+  *(p->phead) = '\0';
+  return 1;
+}
+
 int prs_array()	{
   char *phsav = p->phead;
 
@@ -267,11 +296,9 @@ int prs_array()	{
 
   if(']' == p->c) {
     /* exit array*/
-    if(0 > sprintf(p->phead, indfmt, index))	{
-      errmsg("ERROR fatal.\n", p->c);
-      exit(3);
-    }
+    set_path_index(index);
     printf("%s []\n", p->path);
+    *(p->phead) = '\0';
     return (p->c = getc(p->inf));
   }
   goto val2;
@@ -305,13 +332,10 @@ int prs_array()	{
   }
 
   /* set path */
-  if(0 > sprintf(p->phead, indfmt, index))	{
-    errmsg("ERROR fatal.\n", p->c);
-    exit(3);
-  }
+  set_path_index(index);
   p->phead += strlen(p->phead);
   p->c = action();
-  p->phead = phsav;
+  unset_path_index(phsav);
   index++;
   goto vdl;
 
@@ -324,11 +348,9 @@ int prs_array()	{
   else if(']' == p->c) {
     /* exit array*/
     if(0 == index)	{
-      if(0 > sprintf(p->phead, indfmt, index))	{
-	errmsg("ERROR fatal.\n", p->c);
-	exit(3);
-      }
-      printf("%s []\n", p->path);
+      /* This block should be assertion. */
+      errmsg("ERROR unreachable.\n");
+      exit(3);
     }
     return (p->c = getc(p->inf));
   }
