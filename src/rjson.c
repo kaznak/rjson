@@ -60,7 +60,7 @@ int eprintmsg(int lineno, char *fmt, ...)	{
 /* parse *//////////////////////////////////////////////////////////////////////////////////
 
 const char *pathroot = "$";
-const char *pathdlm = ".";
+const char pathdlm = '.';
 char indfmt[BUFSIZ];
 int index_width = 0;
 
@@ -369,18 +369,22 @@ int prs_array()	{
 
 /* prs_object *//////////////////////////////////////////////////////////////////////////////////
 int prs_object_key()	{
-  char *c;
-
+  const char *psav = p->phead;
   int i;
   char uenc[5];
   unsigned int uchi = 0;
   uenc[4] = '\0';
-  
-  for(c = pathdlm; '\0' != *c; *(p->phead++) = *(c++));
+
+  *(p->phead++) = pathdlm;
   
  str:
+  check_path_buffer();
   switch(p->c = getc(p->inf))	{
   case '"':
+    if(psav == p->phead)	{
+      errmsg("ERROR null key.\n");
+      exit(1);
+    }
     *p->phead = '\0';
     return (p->c = getc(p->inf));
   case '\\':
